@@ -38,7 +38,9 @@ else
 fi
 
 # Install the package
-apt install "${CACHE_DIR}/${HNY_COLLECTOR_DEB}"
+dpkg -x "${CACHE_DIR}/${HNY_COLLECTOR_DEB}" $BUILD_DIR/.apt/
+
+# Copy the config
 cp "${CACHE_DIR}/${HNY_COLLECTOR_CONFIG}" "$BUILD_DIR"
 
 # Install the runner
