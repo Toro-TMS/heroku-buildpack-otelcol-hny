@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Fail fast
+set -e
+set -o pipefail
+
+# Debug
+set -x
+
+# Parse params
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+
+# Set pinned version
+VERSION="1.7.0"
+
+if [ -f "$ENV_DIR/OTELCOL_VERSION" ]; then
+  VERSION=$(cat "$ENV_DIR/OTELCOL_VERSION")
+fi
+
+HNY_COLLECTOR_DEB="otel-hny-collector-${VERSION}.deb"
+HNY_COLLECTOR_CONFIG="honeycomb-metrics-config.yaml"
+
+if [ ! -f "$CACHE_DIR/${HNY_COLLECTOR_DEB}" ]; then
+  echo "-----> Downloading v${VERSION} of Honeycomb OpenTelemetry Collector"
+
+  wget --quiet -O "$HNY_COLLECTOR_DEB" "https://github.com/honeycombio/opentelemetry-collector-configs/releases/download/v${VERSION}/otel-hny-collector_1.0.0_amd64.deb"
+  wget --quiet -O "$HNY_COLLECTOR_CONFIG" "https://github.com/honeycombio/opentelemetry-collector-configs/releases/download/v${VERSION}/honeycomb-metrics-config.yaml"
+
+  # Always create the cache dir
+  mkdir -p "$CACHE_DIR"
+
+  mv "$HNY_COLLECTOR_DEB" "$CACHE_DIR"
+  mv "$HNY_COLLECTOR_CONFIG" "$CACHE_DIR"
+else
+  echo "-----> Honeycomb OpenTelemetry Collector v${VERSION} found in cache"
+fi
+
+# Install the package
+apt install "${CACHE_DIR}/${HNY_COLLECTOR_DEB}"
+cp "${CACHE_DIR}/${HNY_COLLECTOR_CONFIG}" "$BUILD_DIR"
+
+# Install the runner
+echo "-----> Installing Honeycomb OpenTelemetry Collector runner"
+mkdir -p "${BUILD_DIR}/.profile.d"
+
+cat <<EOF > "${BUILD_DIR}/.profile.d/otel-hny-collector.sh"
+if [ "\$DYNOTYPE" == "run" ]; then
+  DISABLE_OTELCOL="true"
+fi
+
+if [ -n "\$DISABLE_OTELCOL" ]; then
+  echo "The OpenTelemetry Collector agent has been disabled. Unset the \$DISABLE_OTELCOL or set missing environment variables."
+else
+  bash -c "otel-hny-collector --config \$HOME/${HNY_COLLECTOR_CONFIG} 2>&1 &"
+fi
+EOF
+
+chmod +x "${BUILD_DIR}/.profile.d/otel-hny-collector.sh"
