@@ -48,10 +48,12 @@ echo "-----> Installing Honeycomb OpenTelemetry Collector runner"
 mkdir -p "${BUILD_DIR}/.profile.d"
 
 cat <<EOF > "${BUILD_DIR}/.profile.d/otel-hny-collector.sh"
+#!/usr/bin/env bash
+
 if [ -n "\$DISABLE_OTELCOL" ]; then
   echo "The Honeycomb OpenTelemetry Collector agent has been disabled."
 else
-  bash -c "otelcol-hny --config \$HOME/${HNY_COLLECTOR_CONFIG} 2>&1 &"
+  bash -c "OTEL_RESOURCE_ATTRIBUTES="${OTELCOL_RESOURCE_ATTRIBUTES}" otelcol-hny --config \$HOME/${HNY_COLLECTOR_CONFIG} 2>&1 &"
 fi
 EOF
 
