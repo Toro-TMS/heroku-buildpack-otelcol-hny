@@ -15,6 +15,9 @@ ENV_DIR=$3
 # Set pinned version
 VERSION="1.7.0"
 
+# Set pinned yq version
+YQ_VERSION="4.34.2"
+
 if [ -f "$ENV_DIR/OTELCOL_VERSION" ]; then
   VERSION=$(cat "$ENV_DIR/OTELCOL_VERSION")
 fi
@@ -22,26 +25,35 @@ fi
 HNY_COLLECTOR_DEB="otel-hny-collector-${VERSION}.deb"
 HNY_COLLECTOR_CONFIG="honeycomb-metrics-config.yaml"
 
+# Always create the cache dir
+mkdir -p "$CACHE_DIR"
+
+if [ ! -f "$CACHE_DIR/yq" ]; then
+  echo "-----> Downloading lastest version of 'yq'"
+
+  wget --quiet https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64.tar.gz -O - | tar xz
+  mv yq_linux_amd64 "${CACHE_DIR}/yq"
+fi
+
 if [ ! -f "$CACHE_DIR/${HNY_COLLECTOR_DEB}" ]; then
   echo "-----> Downloading v${VERSION} of Honeycomb OpenTelemetry Collector"
 
-  wget --quiet -O "$HNY_COLLECTOR_DEB" "https://github.com/honeycombio/opentelemetry-collector-configs/releases/download/v${VERSION}/otel-hny-collector_1.0.0_amd64.deb"
-  wget --quiet -O "$HNY_COLLECTOR_CONFIG" "https://github.com/honeycombio/opentelemetry-collector-configs/releases/download/v${VERSION}/honeycomb-metrics-config.yaml"
-
-  # Always create the cache dir
-  mkdir -p "$CACHE_DIR"
-
-  mv "$HNY_COLLECTOR_DEB" "$CACHE_DIR"
-  mv "$HNY_COLLECTOR_CONFIG" "$CACHE_DIR"
+  wget --quiet -O "${CACHE_DIR}/${HNY_COLLECTOR_DEB}" "https://github.com/honeycombio/opentelemetry-collector-configs/releases/download/v${VERSION}/otel-hny-collector_1.0.0_amd64.deb"
+  wget --quiet -O "${CACHE_DIR}/${HNY_COLLECTOR_CONFIG}" "https://github.com/honeycombio/opentelemetry-collector-configs/releases/download/v${VERSION}/honeycomb-metrics-config.yaml"
 else
   echo "-----> Honeycomb OpenTelemetry Collector v${VERSION} found in cache"
 fi
 
-# Install the package
+# Install the collector package
 dpkg -x "${CACHE_DIR}/${HNY_COLLECTOR_DEB}" $BUILD_DIR/.apt/
 
 # Copy the config
 cp "${CACHE_DIR}/${HNY_COLLECTOR_CONFIG}" "$BUILD_DIR"
+
+# Configure the collectors logging level
+if [ -f "$ENV_DIR/OTELCOL_LOG_LEVEL" ]; then
+  "${CACHE_DIR}/yq" -i ".service.telemetry.logs.level = \"$(cat "$ENV_DIR/OTELCOL_LOG_LEVEL")\"" "$BUILD_DIR/${HNY_COLLECTOR_CONFIG}"
+fi
 
 # Install the runner
 echo "-----> Installing Honeycomb OpenTelemetry Collector runner"
